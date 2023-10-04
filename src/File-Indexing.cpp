@@ -22,7 +22,51 @@ struct IndexEntry
 class fileIndexer : public ZURA::fileOperations
 {
 private:
+    std::vector<std::streampos> lineOffsets;
+    std::string fileName; // need to initialize with constructor
+    std::string line;
+    // able to do both in and out streams with fstream, might switch this later
+    std::fstream userFile; //.txt file
+    std::fstream dataFile; //.dat file, just use the same filenam
 public:
+    fileIndexer(std::string filename) : fileName()
+    {
+        fileName = filename;
+    } // user inputs text file
+    // openfile fileOperations function
+    //
+    // must call this first before gathering offsets
+
+    // update this to remove anything after a .
+    void createDataFile(std::string filename)
+    {
+        std::string searchText = ".txt";
+        size_t found = filename.find(searchText);
+        while (found != std::string::npos)
+        {
+            filename.erase(found, searchText.length());
+            found = filename.find(searchText, found);
+        }
+        ZURA::fileOperations::s_createFile(filename);
+    }
+    void openUserFile()
+    {
+        if (!userFile.is_open())
+            userFile.open(fileName);
+        else
+        {
+            std::cout << "Error file already opened / file cant be opened" << std::endl;
+        }
+    }
+    void openDataFile()
+    {
+        if (!dataFile.is_open())
+            dataFile.open(fileName);
+        else
+        {
+            std::cout << "Error file already opened / file cant be opened / file not created" << std::endl;
+        }
+    }
 };
 
 int main()
@@ -54,7 +98,7 @@ int main()
     }
     // Search for a specific line number
     int lineNumberToSearch = 3; // Replace with the desired line number
-
+    // this only searched THAT line
     if (lineNumberToSearch >= 1 && lineNumberToSearch <= lineOffsets.size())
     {
         // Seek to the offset of the desired line
