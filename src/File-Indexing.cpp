@@ -17,27 +17,33 @@
 // this is because i can just use fileropations close and open files and file stream checkers
 // i also want to learn how pointers and file streams work, and maybe recreate from scratch
 // create support for json files, or create anohter library for indexing and reading json files bc json already has a prebuilt indexers ig
-#include "/home/dev/Documents/projects/ZURA-Lib/File-Operations/src/FileOperations.cpp"
+#include "/home/dev/projects/projects/ZURA-Lib/File-Operations/src/FileOperations.hpp"
 #include <unordered_map>
-struct IndexEntry
+#include <algorithm>
+#include <random>
+struct Record
 {
-    std::streampos offset; // offset in the original data file
-    std::streamsize size;  // size of the chunk
+    int position;
+    std::string data;
 };
 class fileIndexer : public ZURA::fileOperations
 {
 private:
-    std::vector<std::streampos> lineOffsets;
+    //  std::vector<std::streampos> lineOffsets;
     std::string fileName; // need to initialize with constructor
+    std::string dataFileName;
     std::string line;
     // able to do both in and out streams with fstream, might switch this later
     std::fstream userFile; //.txt file
-    std::fstream dataFile; //.dat file, just use the same filenam
+    std::fstream dataFile; //.dat file, just use the same filename
+
 public:
     fileIndexer(std::string filename) : fileName()
     {
         fileName = filename;
         createDataFile(fileName);
+        openUserFile();
+        openDataFile();
     }
     ~fileIndexer()
     {
@@ -55,9 +61,8 @@ public:
     // must call this first before gathering offsets
 
     // update this to remove anything after a .
-    void createDataFile(std::string filename)
+    void createDataFile(std::string filename = "")
     {
-
         std::string searchText = ".txt";
         size_t found = filename.find(searchText);
         while (found != std::string::npos)
@@ -65,77 +70,151 @@ public:
             filename.erase(found, searchText.length());
             found = filename.find(searchText, found);
         }
-
         ZURA::fileOperations::s_createFile(filename + ".data", false); // creates file with .data extention, s_createFile takes care of if file exist and whether to overwrite defualt is false
+        dataFileName = filename + ".data";
     }
-    void openUserFile()
+    bool openUserFile()
     {
+        if (userFile.is_open())
+        {
+            userFile.close();
+        }
+        userFile.open(fileName);
         if (!userFile.is_open())
-            userFile.open(fileName);
-        else
         {
-            std::cout << "Error file already opened / file cant be opened" << std::endl;
+            std::cout << "ERROR OPENING USERFILE" << std::endl;
+            return false;
+        }
+        return true;
+    }
+    bool openDataFile()
+    {
+        if (dataFile.is_open())
+        {
+            dataFile.close(); // Close the dataFile if it's already open
+        }
+
+        dataFile.open(dataFileName); // Open or reopen the data file
+        if (!dataFile.is_open())
+        {
+            std::cout << "Error opening or reopening the data file." << std::endl;
+            return false;
+        }
+        return true;
+    }
+
+    // this pushes everything from userFile to indexFile and creates the index
+    void pushIndex()
+    {
+        openDataFile();
+        openUserFile();
+        std::vector<Record> records;
+        std::string line;
+        while (std::getline(userFile, line))
+        {
+            Record temp;
+            temp.position = userFile.tellg();
+            temp.data = line;
+            records.push_back(temp);
+        }
+        for (Record &tempp : records)
+        {
+            dataFile.write(reinterpret_cast<const char *>(&tempp), sizeof(Record));
         }
     }
-    void openDataFile()
+    void altPushIndex()
     {
-        if (!dataFile.is_open())
-            dataFile.open(fileName);
+        openUserFile();
+        openDataFile();
+        std::vector<Record> records;
+        std::string line;
+        int i = 0;
+        while (std::getline(userFile, line))
+        {
+            Record temp;
+            temp.position = i;
+            i++;
+            temp.data = line;
+            records.push_back(temp);
+        }
+        for (int i = 0; i < records.size(); i++)
+        {
+            dataFile << records[i].position << " " << records[i].data << std::endl;
+        }
+    }
+    void altSeek(int pos)
+    {
+        openUserFile();
+        openDataFile();
+        Record records;
+        int i = 0;
+        Record temp;
+        while (!dataFile.eof())
+        {
+            dataFile >> temp.position >> temp.data;
+            if (pos == temp.position)
+            {
+                std::cout << temp.position << std::endl;
+                std::cout << temp.data << std::endl;
+                return;
+            }
+            temp.position = 0;
+            temp.data = "";
+        }
+    }
+    void seek(int pos)
+    {
+        openDataFile();
+
+        int seekPos = pos;
+        int recordSize = sizeof(Record);
+        int seekSIZE = seekPos * recordSize;
+        std::streampos seekOffset = static_cast<std::streampos>(seekSIZE);
+        dataFile.seekg(seekOffset);
+        Record recordd = {0, ""};
+
+        if (!dataFile.read(reinterpret_cast<char *>(&recordd), sizeof(Record)))
+        {
+            std::cout << "Error reading the element at the specified position." << std::endl;
+        }
         else
         {
-            std::cout << "Error file already opened / file cant be opened / file not created" << std::endl;
+            std::cout << "pos: " << recordd.position << std::endl;
+            std::cout << "data: " << recordd.data << std::endl;
         }
+    }
+    static std::string generateRandomString(int length)
+    {
+        const std::string characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        std::random_device rd;
+        std::mt19937 generator(rd());
+        std::uniform_int_distribution<int> distribution(0, characters.size() - 1);
+
+        std::string randomString;
+        for (int i = 0; i < length; i++)
+        {
+            randomString += characters[distribution(generator)];
+        }
+
+        return randomString;
+    }
+    void stringToFile(std::string text)
+    {
+        userFile << text << std::endl;
     }
 };
 
 int main()
 {
     fileIndexer indexfile("testfile.txt");
+    // indexfile.altPushIndex();
+    indexfile.altSeek(17286491);
+    /*
+    for (int i = 0; i < 100000000; i++)
+    {
+        std::string text = fileIndexer::generateRandomString(10);
+        indexfile.stringToFile(text);
+    }*/
+    std::cout;
     return 0;
 }
-
-/*fileIndexer indexFile; // this is the index file, with the offsets
-    fileIndexer dataFile;  // this is just user data file without offsets
-    ZURA::fileOperations::s_createFile("indexfile.txt", false);
-    indexFile.openfile("indexfile.txt", false);*/
-
-// MVP prototype, this reads file stream and grabs its offsets, now i need to print these into a file
-// then search a file for a specific thing like a certain line using the offset
-/*
-std::string filename = "testfile.txt";
-std::ifstream inputFile(filename);
-std::vector<std::streampos> lineOffsets;
-std::string line;
-lineOffsets.push_back(inputFile.tellg()); // this will get the initial offset of the beginning of the file, so index 0 should be first line of file
-while (std::getline(inputFile, line))
-{
-    lineOffsets.push_back(inputFile.tellg());
-}
-inputFile.close();
-
-// printing all offsets
-for (std::size_t i = 0; i < lineOffsets.size(); ++i)
-{
-    std::cout << "LINE: " << i << std::endl;
-    std::cout << "OFFSET: " << lineOffsets[i] << std::endl;
-    std::cout << std::endl;
-}
-// Search for a specific line number
-int lineNumberToSearch = 3; // Replace with the desired line number
-// this only searched THAT line
-if (lineNumberToSearch >= 1 && lineNumberToSearch <= lineOffsets.size())
-{
-    // Seek to the offset of the desired line
-    inputFile.open(filename); // Reopen the file
-    inputFile.seekg(lineOffsets[lineNumberToSearch - 1]);
-
-    // Read and print the desired line
-    std::getline(inputFile, line);
-    std::cout << "Line " << lineNumberToSearch << ": " << line << std::endl;
-    inputFile.close();
-}
-else
-{
-    std::cout << "Invalid line number." << std::endl;
-}
-*/
