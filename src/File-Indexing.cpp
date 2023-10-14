@@ -1,26 +1,12 @@
-// this will create indexed files.
-// index files are files where you can look for records in a text file without reprocessing the entire file each time you want to find a certain record
-// i will use marshalling, offsets, and indexes
-
-// goal for now: create a indexer where i can skip to points in the file with offsets
-
 // notes:
-// tellg() returns offset pointer position from file stream in file
-
-// todo
-// read user file 1 by 1, store into index file with offset : user-data
-// ok so read user file and find each offset, then paste that information directly into data file..
-
-// reimplement my main MVP into a more reuseable form
-
-// !! what i need to do is create each file using my fileoperations object, it will be easier to maintain i think.
-// this is because i can just use fileropations close and open files and file stream checkers
-// i also want to learn how pointers and file streams work, and maybe recreate from scratch
-// create support for json files, or create anohter library for indexing and reading json files bc json already has a prebuilt indexers ig
+// stream .good .fail, etc
+// throw / catch FileOpenError(), and FileReadError()
+// .clear() failbit, once a file stream error happens a flag continues to stay preventing further file streams, use .clear() to continue the stream
 #include "/home/dev/projects/projects/ZURA-Lib/File-Operations/src/FileOperations.hpp"
 #include <unordered_map>
 #include <algorithm>
 #include <random>
+#include <filesystem>
 struct Record
 {
     int position;
@@ -61,7 +47,7 @@ public:
     // must call this first before gathering offsets
 
     // update this to remove anything after a .
-    void createDataFile(std::string filename = "")
+    void createDataFile(std::string filename = "", bool overwrite = false)
     {
         std::string searchText = ".txt";
         size_t found = filename.find(searchText);
@@ -70,8 +56,15 @@ public:
             filename.erase(found, searchText.length());
             found = filename.find(searchText, found);
         }
-        ZURA::fileOperations::s_createFile(filename + ".data", false); // creates file with .data extention, s_createFile takes care of if file exist and whether to overwrite defualt is false
         dataFileName = filename + ".data";
+        if (!std::filesystem::exists(dataFileName) || overwrite == true) // std::filesystem::exists checks if file exists and returns a bool true or false, actually a pretty cool c++ feature.
+        {
+            ZURA::fileOperations::s_createFile(dataFileName, false); // creates file with .data extention, s_createFile takes care of if file exist and whether to overwrite defualt is false
+        }
+        else
+        {
+            std::cout << "File: " << dataFileName << " already exists." << std::endl;
+        }
     }
     bool openUserFile()
     {
@@ -144,22 +137,37 @@ public:
     }
     void altSeek(int pos)
     {
-        openUserFile();
         openDataFile();
-        Record records;
-        int i = 0;
+        if (!dataFile.is_open())
+        {
+            std::cout << "not open faggot" << std::endl;
+            return;
+        }
         Record temp;
         while (!dataFile.eof())
         {
-            dataFile >> temp.position >> temp.data;
-            if (pos == temp.position)
+            if (!(dataFile >> temp.position >> temp.data))
             {
-                std::cout << temp.position << std::endl;
-                std::cout << temp.data << std::endl;
-                return;
+                if (!userFile.good())
+                {
+                    std::cout << "file stream error" << std::endl;
+                    return;
+                }
+                std::cout << "error with reading stream" << std::endl;
             }
-            temp.position = 0;
-            temp.data = "";
+            else
+            {
+
+                // dataFile >> temp.position >> temp.data;
+                if (pos == temp.position)
+                {
+                    std::cout << temp.position << std::endl;
+                    std::cout << temp.data << std::endl;
+                    return;
+                }
+                temp.position = 0;
+                temp.data = "";
+            }
         }
     }
     void seek(int pos)
@@ -208,13 +216,12 @@ int main()
 {
     fileIndexer indexfile("testfile.txt");
     // indexfile.altPushIndex();
-    indexfile.altSeek(17286491);
+    indexfile.altSeek(1);
     /*
     for (int i = 0; i < 100000000; i++)
     {
         std::string text = fileIndexer::generateRandomString(10);
         indexfile.stringToFile(text);
     }*/
-    std::cout;
     return 0;
 }
